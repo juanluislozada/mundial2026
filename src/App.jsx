@@ -143,14 +143,84 @@ const FALLBACK_RESULTS = {
   A2: [2, 1], // Corea del Sur 2-1 Chequia
 };
 
+// Rondas de eliminación, en orden
 const KO_ROUNDS = [
-  { es:"Dieciseisavos de final", en:"Round of 32", d:"28 jun – 3 jul" },
-  { es:"Octavos de final", en:"Round of 16", d:"4 – 7 jul" },
-  { es:"Cuartos de final", en:"Quarter-finals", d:"9 – 11 jul" },
-  { es:"Semifinales", en:"Semi-finals", d:"14 – 15 jul · Dallas / Atlanta" },
-  { es:"Tercer lugar", en:"Third place", d:"18 jul · Miami" },
-  { es:"Gran Final", en:"Final", d:"19 jul · MetLife, Nueva York/NJ" },
+  { key:"R32", es:"Dieciseisavos de final", en:"Round of 32" },
+  { key:"R16", es:"Octavos de final", en:"Round of 16" },
+  { key:"QF",  es:"Cuartos de final", en:"Quarter-finals" },
+  { key:"SF",  es:"Semifinales", en:"Semi-finals" },
+  { key:"TP",  es:"Tercer lugar", en:"Third place" },
+  { key:"F",   es:"Final", en:"Final" },
 ];
+
+// Etapas que devuelve football-data.org → nuestra ronda
+const STAGE_MAP = {
+  LAST_32:"R32", LAST_16:"R16",
+  QUARTER_FINALS:"QF", QUARTER_FINAL:"QF",
+  SEMI_FINALS:"SF", SEMI_FINAL:"SF",
+  THIRD_PLACE:"TP", "3RD_PLACE":"TP",
+  FINAL:"F",
+};
+const KO_STAGES = new Set(Object.keys(STAGE_MAP));
+
+/* Calendario oficial de eliminatorias (sorteo FIFA).
+   Sedes, fechas y horarios verificados. Los equipos son
+   marcadores (2.º A, Ganador 73, etc.) hasta que se definan:
+   se llenan SOLOS desde la API cuando FIFA asigna los cruces.
+   [id, ronda, fecha-hora UTC, ciudad, localSlot, visitanteSlot] */
+const KNOCKOUT = [
+  // Dieciseisavos (28 jun – 3 jul)
+  ["73","R32","2026-06-28T19:00Z","Los Ángeles","2A","2B"],
+  ["76","R32","2026-06-29T17:00Z","Houston","1C","2F"],
+  ["74","R32","2026-06-29T20:30Z","Boston","1E","3:ABCDF"],
+  ["75","R32","2026-06-30T01:00Z","Monterrey","1F","2C"],
+  ["78","R32","2026-06-30T17:00Z","Dallas","2E","2I"],
+  ["77","R32","2026-06-30T21:00Z","Nueva York/NJ","1I","3:CDFGH"],
+  ["79","R32","2026-07-01T01:00Z","Ciudad de México","1A","3:CEFHI"],
+  ["80","R32","2026-07-01T16:00Z","Atlanta","1L","3:EHIJK"],
+  ["82","R32","2026-07-01T20:00Z","Seattle","1G","3:AEHIJ"],
+  ["81","R32","2026-07-02T00:00Z","San Francisco","1D","3:BEFIJ"],
+  ["84","R32","2026-07-02T19:00Z","Los Ángeles","1H","2J"],
+  ["83","R32","2026-07-02T23:00Z","Toronto","2K","2L"],
+  ["85","R32","2026-07-03T03:00Z","Vancouver","1B","3:EFGIJ"],
+  ["88","R32","2026-07-03T18:00Z","Dallas","2D","2G"],
+  ["86","R32","2026-07-03T22:00Z","Miami","1J","2H"],
+  ["87","R32","2026-07-04T01:30Z","Kansas City","1K","3:DEIJL"],
+  // Octavos (4 – 7 jul)
+  ["90","R16","2026-07-04T17:00Z","Houston","W73","W75"],
+  ["89","R16","2026-07-04T21:00Z","Filadelfia","W74","W77"],
+  ["91","R16","2026-07-05T20:00Z","Nueva York/NJ","W76","W78"],
+  ["92","R16","2026-07-06T00:00Z","Ciudad de México","W79","W80"],
+  ["93","R16","2026-07-06T19:00Z","Dallas","W83","W84"],
+  ["94","R16","2026-07-07T00:00Z","Seattle","W81","W82"],
+  ["95","R16","2026-07-07T16:00Z","Atlanta","W86","W88"],
+  ["96","R16","2026-07-07T20:00Z","Vancouver","W85","W87"],
+  // Cuartos (9 – 11 jul)
+  ["97","QF","2026-07-09T20:30Z","Boston","W89","W90"],
+  ["98","QF","2026-07-11T00:00Z","Los Ángeles","W93","W94"],
+  ["99","QF","2026-07-11T21:00Z","Miami","W91","W92"],
+  ["100","QF","2026-07-12T01:00Z","Kansas City","W95","W96"],
+  // Semifinales (14 – 15 jul)
+  ["101","SF","2026-07-14T19:00Z","Dallas","W97","W98"],
+  ["102","SF","2026-07-15T19:00Z","Atlanta","W99","W100"],
+  // Tercer lugar (18 jul)
+  ["103","TP","2026-07-18T21:00Z","Miami","P101","P102"],
+  // Final (19 jul)
+  ["104","F","2026-07-19T19:00Z","Nueva York/NJ","W101","W102"],
+];
+
+// Convierte un slot ("2A", "1C", "3:ABCDF", "W73", "P101") a texto
+function slotLabel(slot, lang) {
+  if (slot.startsWith("W")) return (lang==="es"?"Ganador ":"Winner ") + slot.slice(1);
+  if (slot.startsWith("P")) return (lang==="es"?"Perdedor ":"Loser ") + slot.slice(1);
+  if (slot.startsWith("3:")) {
+    const groups = slot.slice(2).split("").join("/");
+    return (lang==="es"?"Mejor 3.º (":"Best 3rd (") + groups + ")";
+  }
+  const pos = slot[0], grp = slot[1];
+  const ord = lang==="es" ? pos+".º " : (pos==="1"?"1st ":"2nd ");
+  return ord + grp;
+}
 
 const TZ_OPTIONS = [
   { id:"auto", es:"Tu hora (auto)", en:"Your time (auto)" },
@@ -165,7 +235,7 @@ const TZ_OPTIONS = [
 
 const TXT = {
   matches:{es:"Partidos",en:"Matches"}, groups:{es:"Grupos",en:"Groups"},
-  bracket:{es:"Llaves",en:"Bracket"}, info:{es:"Info",en:"About"},
+  bracket:{es:"Eliminatorias",en:"Bracket"}, info:{es:"Info",en:"About"},
   today:{es:"HOY",en:"TODAY"}, live:{es:"EN VIVO",en:"LIVE"},
   ft:{es:"FINAL",en:"FT"}, group:{es:"Grupo",en:"Group"},
   thirds:{es:"Mejores terceros (clasifican 8 de 12)",en:"Best thirds (8 of 12 advance)"},
@@ -180,6 +250,11 @@ const TXT = {
             en:"Schedule, venues and groups per the official FIFA draw (Dec 5, 2025) and the March 2026 playoffs. Kickoff times adjust to your timezone automatically. Live scores via football-data.org."},
   liveData:{es:"Marcadores en vivo · actualizado",en:"Live scores · updated"},
   fallbackData:{es:"Modo respaldo (datos manuales)",en:"Fallback mode (manual data)"},
+  koIntro:{es:"Calendario oficial de la fase final con fechas, sedes y horarios en tu zona. Los equipos aparecen en cuanto FIFA define cada cruce; los marcadores entran en vivo.",
+           en:"Official knockout schedule with dates, venues and times in your zone. Teams appear as soon as FIFA sets each tie; scores update live."},
+  pens:{es:"pen.",en:"pen."},
+  createdBy:{es:"Una app de",en:"An app by"},
+  ubicuaCta:{es:"Visitar portal →",en:"Visit site →"},
 };
 
 const t = (k, lang) => TXT[k][lang];
@@ -264,20 +339,6 @@ const C = {
   text:"#ECF2FC", mute:"#8FA3C4", green:"#2EE08A", gold:"#F2C14E",
 };
 
-function SponsorSlot({lang}) {
-  return (
-    <div style={{margin:"14px 0", padding:"12px 16px", borderRadius:12,
-      border:`1.5px dashed ${C.gold}55`, background:"linear-gradient(90deg,#F2C14E0F,transparent)",
-      display:"flex", justifyContent:"space-between", alignItems:"center", gap:10}}>
-      <div>
-        <div style={{fontSize:11, letterSpacing:2, color:C.gold, fontWeight:700}}>SPONSOR</div>
-        <div style={{fontSize:14, color:C.text}}>{t("sponsor",lang)}</div>
-      </div>
-      <div style={{fontSize:12, color:C.mute, textAlign:"right"}}>{t("sponsorCta",lang)}</div>
-    </div>
-  );
-}
-
 function MatchCard({m, tz, lang, results, liveIds}) {
   const r = results[m[0]];
   const isLive = liveIds.has(m[0]);
@@ -345,7 +406,6 @@ function MatchesView({tz, lang, results, liveIds}) {
           </button>
         ))}
       </div>
-      <SponsorSlot lang={lang}/>
       {list.length ? list.map(m=>
         <MatchCard key={m[0]} m={m} tz={tz} lang={lang} results={results} liveIds={liveIds}/>)
         : <p style={{color:C.mute}}>{t("noMatches",lang)}</p>}
@@ -408,26 +468,134 @@ function GroupsView({lang, results}) {
   );
 }
 
-function BracketView({lang}) {
+/* Une el calendario fijo de eliminatorias con lo que entrega la API.
+   Empareja por ronda + cercanía de horario, sin inventar nada:
+   si la API ya tiene los equipos reales, los muestra; si no, deja
+   el marcador de posición (2.º A, Ganador 73, etc.). */
+function mergeKnockout(apiMatches) {
+  const out = {};
+  const koApi = (apiMatches || []).filter(m => KO_STAGES.has(m.stage));
+  const byRound = {};
+  for (const am of koApi) {
+    const rk = STAGE_MAP[am.stage];
+    (byRound[rk] ||= []).push(am);
+  }
+  for (const rk of Object.keys(byRound)) byRound[rk].sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+
+  for (const rd of KO_ROUNDS) {
+    const statics = KNOCKOUT.filter(k => k[1]===rd.key).sort((a,b)=>new Date(a[2])-new Date(b[2]));
+    const apis = (byRound[rd.key] || []).slice();
+    for (const k of statics) {
+      const kt = new Date(k[2]).getTime();
+      let best=-1, bestDiff=Infinity;
+      apis.forEach((am,idx)=>{
+        const d = Math.abs(new Date(am.utcDate).getTime()-kt);
+        if (d<bestDiff){bestDiff=d; best=idx;}
+      });
+      if (best>=0 && bestDiff < 6*3600*1000) {
+        const am = apis.splice(best,1)[0];
+        const live = ["IN_PLAY","PAUSED"].includes(am.status);
+        const done = am.status==="FINISHED";
+        out[k[0]] = {
+          home: resolveCode(am.home, am.homeName),
+          away: resolveCode(am.away, am.awayName),
+          hg: am.hg, ag: am.ag, php: am.php, pap: am.pap,
+          live, done,
+        };
+      }
+    }
+  }
+  return out;
+}
+
+function KnockoutCard({ k, tz, lang, info }) {
+  const [, , utc, city, hSlot, aSlot] = k;
+  const live = info?.live, done = info?.done;
+  const rows = [
+    { code: info?.home, slot: hSlot, g: info?.hg, p: info?.php, side:0 },
+    { code: info?.away, slot: aSlot, g: info?.ag, p: info?.pap, side:1 },
+  ];
+  const hasScore = info && info.hg != null && info.ag != null;
+  const winSide = done && hasScore
+    ? (info.hg>info.ag ? 0 : info.ag>info.hg ? 1
+      : (info.php??0)>(info.pap??0) ? 0 : (info.pap??0)>(info.php??0) ? 1 : -1)
+    : -1;
+  return (
+    <div style={{background:C.card, border:`1px solid ${live?C.green+"66":C.line}`,
+      borderRadius:14, padding:"12px 14px", marginBottom:10}}>
+      <div style={{display:"flex", justifyContent:"space-between", fontSize:11,
+        color:C.mute, letterSpacing:1, marginBottom:8}}>
+        <span>#{k[0]} · {city}</span>
+        {live ? <span style={{color:C.green, fontWeight:800}}>● {t("live",lang)}</span>
+          : done ? <span style={{color:C.gold, fontWeight:700}}>{t("ft",lang)}</span>
+          : <span>{fmtDayLabel(fmtDayKey(utc,tz),lang)} · {fmtTime(utc,tz,lang)}</span>}
+      </div>
+      {rows.map((r,i)=>{
+        const known = r.code && TEAMS[r.code];
+        const won = winSide===i;
+        return (
+          <div key={i} style={{display:"flex", justifyContent:"space-between",
+            alignItems:"center", padding:"3px 0"}}>
+            <span style={{fontSize: known?16:14, fontWeight: won?800:500,
+              color: known ? (done&&!won?C.mute:C.text) : C.mute,
+              fontStyle: known?"normal":"italic"}}>
+              {known ? <><span style={{marginRight:8}}>{TEAMS[r.code].f}</span>{tn(r.code,lang)}</>
+                     : slotLabel(r.slot, lang)}
+            </span>
+            <span style={{fontFamily:"ui-monospace,monospace", fontSize:20, fontWeight:800,
+              minWidth:46, textAlign:"right",
+              color: live?C.green : won?C.green : hasScore?C.mute : C.line}}>
+              {hasScore ? <>{r.g}{r.p!=null && <span style={{fontSize:11, color:C.mute}}> ({r.p})</span>}</> : "–"}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function KnockoutView({lang, tz, apiMatches}) {
+  const ko = useMemo(()=>mergeKnockout(apiMatches), [apiMatches]);
   return (
     <div>
-      {KO_ROUNDS.map((r,i)=>(
-        <div key={i} style={{display:"flex", alignItems:"center", gap:14,
-          background: i===KO_ROUNDS.length-1 ? "#F2C14E14" : C.card,
-          border:`1px solid ${i===KO_ROUNDS.length-1 ? C.gold+"66" : C.line}`,
-          borderRadius:14, padding:"14px 16px", marginBottom:10}}>
-          <div style={{fontFamily:"ui-monospace,monospace", fontSize:22, fontWeight:800,
-            color: i===KO_ROUNDS.length-1 ? C.gold : C.mute, minWidth:44, textAlign:"center"}}>
-            {[32,16,8,4,2,"🏆"][i]}
+      <p style={{color:C.mute, fontSize:13, marginTop:0}}>{t("koIntro",lang)}</p>
+      {KO_ROUNDS.map(rd=>{
+        const matches = KNOCKOUT.filter(k=>k[1]===rd.key)
+          .sort((a,b)=>new Date(a[2])-new Date(b[2]));
+        return (
+          <div key={rd.key} style={{marginBottom:18}}>
+            <div style={{fontWeight:800, color:rd.key==="F"?C.gold:C.green,
+              fontSize:14, letterSpacing:0.5, margin:"4px 0 10px"}}>
+              {rd.key==="F" && "🏆 "}{lang==="es"?rd.es:rd.en}
+            </div>
+            {matches.map(k=>
+              <KnockoutCard key={k[0]} k={k} tz={tz} lang={lang} info={ko[k[0]]}/>)}
           </div>
-          <div>
-            <div style={{fontWeight:700, color:C.text}}>{lang==="es"?r.es:r.en}</div>
-            <div style={{fontSize:13, color:C.mute}}>{r.d}</div>
-          </div>
-        </div>
-      ))}
-      <p style={{color:C.mute, fontSize:13}}>{t("rule",lang)}</p>
+        );
+      })}
     </div>
+  );
+}
+
+function UbicuaCard({lang}) {
+  return (
+    <a href="https://ubicuaeducacion.com/academy/" target="_blank" rel="noopener noreferrer"
+      style={{display:"block", textDecoration:"none", margin:"16px 0 0",
+      padding:"16px 18px", borderRadius:14,
+      border:`1.5px solid ${C.gold}66`,
+      background:"linear-gradient(135deg,#F2C14E14,#0F1A2D)"}}>
+      <div style={{fontSize:11, letterSpacing:2, color:C.gold, fontWeight:700, marginBottom:4}}>
+        {t("createdBy",lang)}
+      </div>
+      <div style={{display:"flex", alignItems:"center", gap:10}}>
+        <span style={{fontSize:22, fontWeight:900, color:C.text, letterSpacing:-0.5}}>
+          Ubicua <span style={{color:C.gold}}>Academy</span>
+        </span>
+      </div>
+      <div style={{fontSize:13, color:C.green, marginTop:6, fontWeight:600}}>
+        {t("ubicuaCta",lang)}
+      </div>
+    </a>
   );
 }
 
@@ -437,7 +605,7 @@ function InfoView({lang}) {
       padding:"16px 18px", lineHeight:1.65}}>
       <h3 style={{margin:"0 0 8px", color:C.gold}}>{t("infoTitle",lang)}</h3>
       <p style={{color:C.text, margin:0}}>{t("infoBody",lang)}</p>
-      <SponsorSlot lang={lang}/>
+      <UbicuaCard lang={lang}/>
     </div>
   );
 }
@@ -524,7 +692,7 @@ export default function App() {
       <main style={{maxWidth:880, margin:"0 auto", padding:"4px 16px 30px"}}>
         {tab==="matches" && <MatchesView tz={tz} lang={lang} results={results} liveIds={liveIds}/>}
         {tab==="groups" && <GroupsView lang={lang} results={results}/>}
-        {tab==="bracket" && <BracketView lang={lang}/>}
+        {tab==="bracket" && <KnockoutView lang={lang} tz={tz} apiMatches={api.matches}/>}
         {tab==="info" && <InfoView lang={lang}/>}
       </main>
 
@@ -539,3 +707,4 @@ export default function App() {
     </div>
   );
 }
+
